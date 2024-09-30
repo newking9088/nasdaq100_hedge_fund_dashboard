@@ -1,0 +1,5 @@
+altair==5.4.1
+matplotlib==3.9.1
+pandas==2.2.2
+plotly==5.23.0
+streamlit==1.38.0
