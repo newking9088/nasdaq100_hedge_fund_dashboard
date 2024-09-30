@@ -17,6 +17,7 @@ In summary, our dashboard has been designed to present these essential metrics c
 # Project Structure
 
 This project consists of the following files and directories:
+```markdown
 project_root/
 ├── .streamlit/
 │   └── config.toml
@@ -32,6 +33,7 @@ project_root/
 ├── nasdaq_100_metrics_ratios.csv
 └── nasdaq_100y.ipynb
 └── requirements.txt
+```
 
 - `.streamlit/`
   
