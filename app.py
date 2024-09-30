@@ -103,6 +103,7 @@ def create_financial_plot(pivot_df, unique_companies, color_map, metric1, metric
                 y=company_data[metric1],
                 mode='lines',
                 name=company,
+                legendgroup= company,
                 line=dict(color=color_map[company])
             ), row=1, col=1)
 
@@ -115,6 +116,7 @@ def create_financial_plot(pivot_df, unique_companies, color_map, metric1, metric
                 y=company_data[metric2],
                 mode='lines',
                 name=company,
+                legendgroup= company,
                 showlegend=False,
                 line=dict(color=color_map[company])
             ), row=1, col=2)
@@ -199,10 +201,7 @@ with st.sidebar:
 st.markdown("<h1 style='text-align: center;'>NASDAQ-100 Financial Indicators Dashboard</h1>", unsafe_allow_html=True)
 
 # Define top performers for KPIs
-current_year = df['year'].max()
-condition = not selected_sector and not selected_subsector
-
-current_df = df[df['year'] == current_year].reset_index(drop=True) if condition else df[df['year'] == years[1]].reset_index(drop=True)
+current_df = df[df['year'] == years[1]].reset_index(drop=True)
 
 pe_top_performer = find_top_performer(current_df, 'price_to_earnings_ratio')
 revenue_top_performer = find_top_performer(current_df, 'yoy_revenue_growth')
@@ -243,6 +242,28 @@ with col3:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+# Add expander for explaining the top KPI performers
+with st.expander(f"Top KPI Performers for NASDAQ-100 Companies in {years[1]}"):
+    st.write(f"""
+        The following key metrics highlight the top-performing NASDAQ-100 companies for the year {years[1]} based on the data provided:
+        
+        **Price-to-Earnings (P/E) Ratio:**  
+        - The Price-to-Earnings ratio (P/E) is a popular measure used to value a company by comparing its current share price to its earnings per share (EPS).
+        - A higher P/E suggests that investors are willing to pay more for a company's earnings, often indicating strong growth potential or high expectations.
+        - The highest P/E ratio performer for {years[1]} is **{pe_top_performer['company']}** with a ratio of **{pe_top_performer['value']:.2f}**.
+
+        **Year-over-Year (YoY) Revenue Growth:**  
+        - This metric measures the percentage increase in a company's revenue compared to the previous year. It reflects the company's ability to grow and expand its sales.
+        - Companies with high YoY revenue growth are typically seen as leaders in their industry, showing strong operational performance.
+        - The company with the highest YoY revenue growth for {years[1]} is **{revenue_top_performer['company']}**, with a growth of **{revenue_top_performer['value']:.2f}%**.
+
+        **Debt-to-Equity (D/E) Ratio:**  
+        - The D/E ratio is a measure of a company's financial leverage, calculated by dividing its total liabilities by its shareholders' equity. A lower ratio is generally considered better, as it indicates a lower level of debt relative to equity.
+        - Companies with lower D/E ratios are typically less risky, as they rely less on borrowing and have a more stable financial structure.
+        - The company with the lowest D/E ratio for {years[1]} is **{debt_equity_top_performer['company']}**, with a D/E ratio of **{debt_equity_top_performer['value']:.2f}**.
+    """)
+
 
 def avoid_mrisk(df: pd.DataFrame, m_threshold: float = -3.0) -> Tuple[float, List]:
     """
@@ -303,7 +324,7 @@ def avoid_zrisk(df: pd.DataFrame, z_threshold: float = 1.81) -> Tuple[float, Lis
     z = z_score.groupby('company').agg({'value': 'mean'})
     
     # Calculate the percentage of companies with an M-score below the threshold
-    risk_company_pc = round(len(z[z['value'] < z_threshold]) * 100. / len(m), 0)
+    risk_company_pc = round(len(z[z['value'] < z_threshold]) * 100. / len(z), 0)
     
     # Identify the companies with an M-score below the threshold
     risk_company = z[z['value'] < z_threshold].index.to_list()
@@ -348,32 +369,34 @@ def cagr(df: pd.DataFrame, cagr_period: int = 5) -> int:
     return int(cagr * 100)
 
 # Section: Donut plots for risk metrics
-st.header("Investment Avoidance and Big-7 Average Return")
+st.header("NASDAQ 100: Risk and Gain Metrics Over the Past 5 Years")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.altair_chart(make_donut(avoid_mrisk(df)[0], "M-Score Avoidance", 'red'), use_container_width=True)
+    st.altair_chart(make_donut(int(avoid_mrisk(df)[0]), "M-Score Avoidance", 'red'), use_container_width=True)
 
 with col2:
-    st.altair_chart(make_donut(avoid_zrisk(df)[0], "Z-Score Avoidance", 'red'), use_container_width=True)
+    st.altair_chart(make_donut(int(avoid_zrisk(df)[0]), "Z-Score Avoidance", 'red'), use_container_width=True)
 
 with col3:
-    st.altair_chart(make_donut(cagr(df), "NASDQ-100 Compound Annual Growth Rate", 'green'), use_container_width=True)
+    st.altair_chart(make_donut(cagr(df), "NASDAQ-100 Compound Annual Growth Rate", 'green'), use_container_width=True)
 
 # Add the "Read More" expander
-with st.expander("Read More about Investment Avoidance and Big-7 EPS Growth"):
-    st.write("""
+with st.expander("Read More about Investment Avoidance and Average Retuen on Investment"):
+    st.write(f"""
         **Investment Avoidance Metrics:**
         
         - The M-Score and Z-Score are key financial ratios used to assess a company's risk for fraudulent or distress behavior. 
         - Companies with a high M-Score are considered more likely to manipulate earnings, whereas a low Z-Score may indicate
          financial distress.
         - Avoidance percentages reflect how much of the total sample falls into these risky categories.
+        - Companies to avoid based on current M-score: {', '.join(avoid_mrisk(df)[1])}
+        - Companies to avoid based on current Z-score: {', '.join(avoid_zrisk(df)[1])}
         
-        **Big 7 Average EPS Growth:**
+        **Average Return for NASDAQ-100 Over Past 5 Years**
         
-        - The Big 7 Average EPS Growth represents the average earnings per share growth of the top 7 companies in the index.
         - A high EPS growth rate is an indicator of a company's profitability and potential for long-term growth.
+         The overall average return on investment when invetsed in NASDAQ-100 over past 5 years.
     """)
 
 #Define a dynamic color palette using Viridis
@@ -402,8 +425,6 @@ fig1 = create_financial_plot(pivot_df, unique_companies, color_map, 'asset_turno
         'Assets Turnover and Gross Profit to Assets')
 
 st.plotly_chart(fig1)
-
-import streamlit as st
 
 # Create expander for Asset Turnover and Gross Profit to Assets Analysis
 with st.expander("Asset Turnover & Gross Profit to Assets Analysis"):
@@ -568,8 +589,6 @@ fig4 = create_financial_plot(pivot_df, unique_companies, color_map, 'cash_ratio'
 
 st.plotly_chart(fig4)
 
-import streamlit as st
-
 # Create expander for Asset Turnover and Gross Profit to Assets Analysis
 with st.expander("Asset Turnover & Gross Profit to Assets Analysis"):
     st.write(r'''
@@ -629,11 +648,6 @@ pivot_df1 = score_df.pivot(index=['company', 'year'], columns='metric', values='
 # Use Altman Z-Score and Beneish M-Score with color-coded bars to visualize risk levels
 agg_df = pivot_df1.groupby('company').agg({'mscore': 'mean', 'zscore': 'mean'}).reset_index()
 
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
 # Assuming pivot_df1 is already defined as per your existing code
 
 # Aggregate data to get average Z-score and M-score
@@ -654,7 +668,8 @@ for company in unique_companies:
     if not company_data.empty:
         z_scores = company_data.filter(like='zscore').iloc[0].values
         years = company_data.filter(like='zscore').columns.str.replace('_', ' ').str.replace('zscore', '').values
-        fig5.add_trace(go.Bar(x=years, y=z_scores, name=company, marker_color=color_map[company], showlegend=False), row=1, col=1)
+        fig5.add_trace(go.Bar(x=years, y=z_scores, name=company, marker_color=color_map[company], 
+                              legendgroup= company, showlegend=True), row=1, col=1)
 
 # Add horizontal line for Z-score threshold
 fig5.add_trace(go.Scatter(
@@ -671,7 +686,8 @@ for company in unique_companies:
     if not company_data.empty:
         m_scores = company_data.filter(like='mscore').iloc[0].values
         years = company_data.filter(like='mscore').columns.str.replace('_', ' ').str.replace('mscore', '').values
-        fig5.add_trace(go.Bar(x=years, y=m_scores, name=company, marker_color=color_map[company]), row=1, col=2)
+        fig5.add_trace(go.Bar(x=years, y=m_scores, name=company, marker_color=color_map[company],
+                        legendgroup= company, showlegend= False), row=1, col=2)
 
 # Add horizontal line for M-score threshold
 fig5.add_trace(go.Scatter(
@@ -679,7 +695,7 @@ fig5.add_trace(go.Scatter(
     y=[-3, -3],
     mode='lines',
     name='M-Score Threshold (-3)',
-    line=dict(color='red', dash='dash')
+    line=dict(color='red', dash='dash', width=2)
 ), row=1, col=2)
 
 # Update layout for better presentation
