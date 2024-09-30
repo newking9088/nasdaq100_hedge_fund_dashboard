@@ -1,5 +1,6 @@
 # nasdaq100_hedge_fund_dashboard
-Hedge funds and investors can leverage insights from the top KPI performers of NASDAQ-100 companies to identify high-growth opportunities and make informed investment decisions, utilizing key metrics such as P/E ratio, YoY revenue growth, D/E ratio etc. to assess financial health and growth potential in a dynamic market.
+Hedge funds and investors can leverage insights from the top KPI performers of NASDAQ-100 companies to identify high-growth opportunities and make informed investment decisions, utilizing key metrics such as P/E ratio, YoY revenue growth, D/E ratio etc. to assess financial health and growth potential in a dynamic market. <a href="https://nasdaq100hedgefunddashboard-paudel.streamlit.app/" target="_blank">Please click here to view the app</a>
+
 
 # NASDAQ-100 Companies Financial Dashboard for Hedge Funds and Investors
 Investors often rely on various financial metrics to make informed decisions about their investments. Among these, key performance indicators (KPIs) such as asset turnover, revenue growth, and liquidity ratios provide critical insights into a company's operational efficiency, profitability, and financial stability. For instance, by analyzing the asset turnover ratio, investors can gauge how effectively a company utilizes its assets to generate revenue. A rising trend in this metric suggests improved efficiency and stronger sales performance, making it an appealing option for investment.
