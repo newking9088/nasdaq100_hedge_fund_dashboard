@@ -1,4 +1,5 @@
-# Import libraries
+###############################################################################
+# Import required libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,9 +7,11 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import altair as alt
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 import os
 
+
+###############################################################################
 # Page configuration
 st.set_page_config(
     page_title = "NASDAQ-100 Index",
@@ -41,6 +44,9 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+
+###############################################################################
+# Define helper functions
 
 # Function to load the dataset
 @st.cache_data
@@ -85,12 +91,38 @@ def make_donut(input_response, input_text, input_color):
     
     return plot_bg + plot + text
 
-# Load data
-df = load_data()
+# Define a function to create line plot for select metrics
+def create_financial_plot(
+    pivot_df: pd.DataFrame, 
+    unique_companies: List[str], 
+    color_map: Dict[str, str], 
+    metric1: str, 
+    metric2: str, 
+    years: Tuple[int, int], 
+    subplot_titles: List[str], 
+    title: str
+) -> go.Figure:
+    """
+    Create a financial plot with two subplots for the specified metrics.
 
-def create_financial_plot(pivot_df, unique_companies, color_map, metric1, metric2, years, subplot_titles, title):
+    This function generates a 1x2 subplot figure displaying trends for two different
+    financial metrics across a specified year range for multiple companies.
+
+    Parameters:
+        pivot_df (pd.DataFrame): DataFrame containing financial data with 'year' and 'company' columns.
+        unique_companies (List[str]): List of unique company names to plot.
+        color_map (Dict[str, str]): Dictionary mapping company names to their respective colors for the plot.
+        metric1 (str): The first metric to be plotted on the first subplot.
+        metric2 (str): The second metric to be plotted on the second subplot.
+        years (Tuple[int, int]): A tuple containing the start and end years for filtering the data.
+        subplot_titles (List[str]): List of titles for the subplots.
+        title (str): The main title for the entire figure.
+
+    Returns:
+        go.Figure: A Plotly figure object containing the subplots with the specified metrics.
+    """
     # Create a 1x2 subplot figure 
-    fig = make_subplots(rows=1, cols=2, subplot_titles = subplot_titles)
+    fig = make_subplots(rows=1, cols=2, subplot_titles=subplot_titles)
 
     # Filter the DataFrame for the selected year range
     filtered_df = pivot_df[pivot_df['year'].between(years[0], years[1])]
@@ -104,7 +136,7 @@ def create_financial_plot(pivot_df, unique_companies, color_map, metric1, metric
                 y=company_data[metric1],
                 mode='lines',
                 name=company,
-                legendgroup= company,
+                legendgroup=company,
                 line=dict(color=color_map[company])
             ), row=1, col=1)
 
@@ -117,7 +149,7 @@ def create_financial_plot(pivot_df, unique_companies, color_map, metric1, metric
                 y=company_data[metric2],
                 mode='lines',
                 name=company,
-                legendgroup= company,
+                legendgroup=company,
                 showlegend=False,
                 line=dict(color=color_map[company])
             ), row=1, col=2)
@@ -127,11 +159,122 @@ def create_financial_plot(pivot_df, unique_companies, color_map, metric1, metric
 
     # Update layout title
     fig.update_layout(
-        title_text = title,
-    showlegend = True
+        title_text=title,
+        showlegend=True
     )
 
     return fig
+
+# Define a function to calculate average m_score and companies that carries risk of manipulation
+def avoid_mrisk(df: pd.DataFrame, m_threshold: float = -3.0) -> Tuple[float, List]:
+    """
+    Identify companies with an M-score below a specified threshold and calculate the percentage of such companies.
+
+    The M-score is a measure used to detect the likelihood of earnings manipulation. This function filters companies
+    based on their average M-score and identifies those that fall below the given threshold, indicating higher risk.
+
+    Parameters:
+    df (pd.DataFrame): DataFrame containing the following columns:
+        - 'company': The name of the company.
+        - 'metric': The type of metric (should include 'mscore').
+        - 'value': The value of the metric.
+    m_threshold (float): The threshold for the M-score to identify high-risk companies. Default is -3.0.
+
+    Returns:
+    Tuple[float, pd.Series]: A tuple containing:
+        - The percentage of companies with an M-score below the threshold.
+        - A Series of companies with an M-score below the threshold.
+    """
+    # Filter the DataFrame for M-score metrics
+    m_score = df[df['metric'] == 'mscore']
+    
+    # Calculate the mean M-score for each company
+    m = m_score.groupby('company').agg({'value': 'mean'})
+    
+    # Calculate the percentage of companies with an M-score below the threshold
+    risk_company_pc = round(len(m[m['value'] < m_threshold]) * 100. / len(m), 0)
+    
+    # Identify the companies with an M-score below the threshold
+    risk_company = m[m['value'] < m_threshold].index.to_list()
+    
+    return risk_company_pc, risk_company
+
+# Define a function to calculate average z_score and companies that carries risk of bankruptcy
+def avoid_zrisk(df: pd.DataFrame, z_threshold: float = 1.81) -> Tuple[float, List]:
+    """
+    Identify companies with an Z-score below a specified threshold and calculate the percentage of such companies.
+
+    The M-score is a measure used to detect the likelihood of earnings manipulation. This function filters companies
+    based on their average Z-score and identifies those that fall below the given threshold, indicating higher risk.
+
+    Parameters:
+    df (pd.DataFrame): DataFrame containing the following columns:
+        - 'company': The name of the company.
+        - 'metric': The type of metric (should include 'zscore').
+        - 'value': The value of the metric.
+    z_threshold (float): The threshold for the Z-score to identify high-risk companies. Default is 1.81.
+
+    Returns:
+    Tuple[float, pd.Series]: A tuple containing:
+        - The percentage of companies with an Z-score below the threshold.
+        - A Series of companies with an Z-score below the threshold.
+    """
+    # Filter the DataFrame for M-score metrics
+    z_score = df[df['metric'] == 'zscore']
+    
+    # Calculate the mean M-score for each company
+    z = z_score.groupby('company').agg({'value': 'mean'})
+    
+    # Calculate the percentage of companies with an M-score below the threshold
+    risk_company_pc = round(len(z[z['value'] < z_threshold]) * 100. / len(z), 0)
+    
+    # Identify the companies with an M-score below the threshold
+    risk_company = z[z['value'] < z_threshold].index.to_list()
+    
+    return risk_company_pc, risk_company
+
+# Define a function to calculate compound annual growth rate 
+def cagr(df: pd.DataFrame, cagr_period: int = 5) -> int:
+    """
+    Calculate the Compound Annual Growth Rate (CAGR) based on YoY EPS growth data.
+
+    The compound annual growth rate (CAGR) is the mean annual growth rate of an 
+    investment over a specified period of time longer than one year. It represents
+    one of the most accurate ways to calculate and determine returns for individual
+    assets, investment portfolios, and anything that can rise or fall in value over time.
+
+    Parameters:
+    - df (pandas.DataFrame): It contains columns value, metric and year.
+    - cagr_period: The number of years we would want to calculate cgar over.
+        
+
+    Returns:
+    int: The CAGR expressed as a percentage.
+    """
+    # Get the most recent year in the dataset
+    current_year = df['year'].max()
+    
+    # Filter data for the past 5 years
+    df_filtered = df[(df['metric'] == 'yoy_eps_growth') & 
+    (df['year'].isin(range(current_year - cagr_period, current_year + 1)))]
+
+    # Group by year and calculate the average YoY EPS growth for each year
+    annual_avg_growth = df_filtered.groupby('year')['value'].mean()
+
+    # Calculate the cumulative growth factor
+    cumulative_growth_factor = (1 + annual_avg_growth / 100).prod()
+
+    # Calculate the CAGR
+    n = len(annual_avg_growth)
+    cagr = cumulative_growth_factor ** (1 / n) - 1
+
+    # Return the CAGR as a percentage
+    return int(cagr * 100)
+
+
+######################################################################
+# Load data
+df = load_data()
 
 ######################################################################
 # Sidebar: Filters for sector, subsector, and company
@@ -148,6 +291,27 @@ with st.sidebar:
     # Add a sidebar label
     st.write("Filter the data by:")
 
+    # User guide expander
+    with st.expander("User Guide", expanded = False):
+        st.write("""
+        ### Welcome to the Dashboard!
+        
+        This application allows you to analyze various key performance indicators (KPIs) for NASDAQ-100 companies.
+        
+        **How to Use:**
+        - Filter the data by:
+            - **Select Sector**: Choose an option to filter companies by their sector.
+            - **Select Subsector**: Choose an option to narrow down by subsector.
+            - **Select Company**: Choose a specific company to analyze.
+            - **Select Year Range**: Filter data from 2017 to 2023.
+
+        - You can click and unclick on legends in the plot to remove or restore specific metrics for better visualization.
+        
+        **Data Range:** The application provides data for the years 2017 to 2023.
+                 
+        **Metric Trend Description**: Refer to the descriptions provided below each metric trend 
+        for definitions and insights into their trends.
+        """)
     # Dropdown for sector selection
     sectors = df['sector'].unique()
     selected_sector = st.multiselect('Select sector', sectors)
@@ -208,8 +372,11 @@ with st.sidebar:
         file_name='filtered_data.csv',
         mime='text/csv',
     )  
+
+######################################################################
 # Main panel: Display top KPIs and charts
-st.markdown("<h1 style='text-align: center;'>NASDAQ-100 Financial Indicators Dashboard</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>NASDAQ-100 Financial \
+            Indicators Dashboard</h1>", unsafe_allow_html=True)
 
 # Define top performers for KPIs
 current_df = df[df['year'] == years[1]].reset_index(drop=True)
@@ -260,124 +427,29 @@ with st.expander(f"Top KPI Performers for NASDAQ-100 Companies in {years[1]}"):
         The following key metrics highlight the top-performing NASDAQ-100 companies for the year {years[1]} based on the data provided:
         
         **Price-to-Earnings (P/E) Ratio:**  
-        - The Price-to-Earnings ratio (P/E) is a popular measure used to value a company by comparing its current share price to its earnings per share (EPS).
-        - A higher P/E suggests that investors are willing to pay more for a company's earnings, often indicating strong growth potential or high expectations.
-        - The highest P/E ratio performer for {years[1]} is **{pe_top_performer['company']}** with a ratio of **{pe_top_performer['value']:.2f}**.
+        - The Price-to-Earnings ratio (P/E) is a popular measure used to value a company by comparing its current share price 
+        to its earnings per share (EPS).
+        - A higher P/E suggests that investors are willing to pay more for a company's earnings, often indicating strong growth
+          potential or high expectations.
+        - The highest P/E ratio performer for {years[1]} is **{pe_top_performer['company']}** with a ratio of 
+        **{pe_top_performer['value']:.2f}**.
 
         **Year-over-Year (YoY) Revenue Growth:**  
-        - This metric measures the percentage increase in a company's revenue compared to the previous year. It reflects the company's ability to grow and expand its sales.
-        - Companies with high YoY revenue growth are typically seen as leaders in their industry, showing strong operational performance.
-        - The company with the highest YoY revenue growth for {years[1]} is **{revenue_top_performer['company']}**, with a growth of **{revenue_top_performer['value']:.2f}%**.
+        - This metric measures the percentage increase in a company's revenue compared to the previous year. It reflects the 
+        company's ability to grow and expand its sales.
+        - Companies with high YoY revenue growth are typically seen as leaders in their industry, showing strong operational 
+        performance.
+        - The company with the highest YoY revenue growth for {years[1]} is **{revenue_top_performer['company']}**, 
+        with a growth of **{revenue_top_performer['value']:.2f}%**.
 
         **Debt-to-Equity (D/E) Ratio:**  
-        - The D/E ratio is a measure of a company's financial leverage, calculated by dividing its total liabilities by its shareholders' equity. A lower ratio is generally considered better, as it indicates a lower level of debt relative to equity.
+        - The D/E ratio is a measure of a company's financial leverage, calculated by dividing its total liabilities by its
+          shareholders' equity. A lower ratio is generally considered better, as it indicates a lower level of debt relative to equity.
         - Companies with lower D/E ratios are typically less risky, as they rely less on borrowing and have a more stable financial structure.
-        - The company with the lowest D/E ratio for {years[1]} is **{debt_equity_top_performer['company']}**, with a D/E ratio of **{debt_equity_top_performer['value']:.2f}**.
+        - The company with the lowest D/E ratio for {years[1]} is **{debt_equity_top_performer['company']}**, with a D/E 
+        ratio of **{debt_equity_top_performer['value']:.2f}**.
     """)
 
-
-def avoid_mrisk(df: pd.DataFrame, m_threshold: float = -3.0) -> Tuple[float, List]:
-    """
-    Identify companies with an M-score below a specified threshold and calculate the percentage of such companies.
-
-    The M-score is a measure used to detect the likelihood of earnings manipulation. This function filters companies
-    based on their average M-score and identifies those that fall below the given threshold, indicating higher risk.
-
-    Parameters:
-    df (pd.DataFrame): DataFrame containing the following columns:
-        - 'company': The name of the company.
-        - 'metric': The type of metric (should include 'mscore').
-        - 'value': The value of the metric.
-    m_threshold (float): The threshold for the M-score to identify high-risk companies. Default is -3.0.
-
-    Returns:
-    Tuple[float, pd.Series]: A tuple containing:
-        - The percentage of companies with an M-score below the threshold.
-        - A Series of companies with an M-score below the threshold.
-    """
-    # Filter the DataFrame for M-score metrics
-    m_score = df[df['metric'] == 'mscore']
-    
-    # Calculate the mean M-score for each company
-    m = m_score.groupby('company').agg({'value': 'mean'})
-    
-    # Calculate the percentage of companies with an M-score below the threshold
-    risk_company_pc = round(len(m[m['value'] < m_threshold]) * 100. / len(m), 0)
-    
-    # Identify the companies with an M-score below the threshold
-    risk_company = m[m['value'] < m_threshold].index.to_list()
-    
-    return risk_company_pc, risk_company
-
-def avoid_zrisk(df: pd.DataFrame, z_threshold: float = 1.81) -> Tuple[float, List]:
-    """
-    Identify companies with an Z-score below a specified threshold and calculate the percentage of such companies.
-
-    The M-score is a measure used to detect the likelihood of earnings manipulation. This function filters companies
-    based on their average Z-score and identifies those that fall below the given threshold, indicating higher risk.
-
-    Parameters:
-    df (pd.DataFrame): DataFrame containing the following columns:
-        - 'company': The name of the company.
-        - 'metric': The type of metric (should include 'zscore').
-        - 'value': The value of the metric.
-    z_threshold (float): The threshold for the Z-score to identify high-risk companies. Default is 1.81.
-
-    Returns:
-    Tuple[float, pd.Series]: A tuple containing:
-        - The percentage of companies with an Z-score below the threshold.
-        - A Series of companies with an Z-score below the threshold.
-    """
-    # Filter the DataFrame for M-score metrics
-    z_score = df[df['metric'] == 'zscore']
-    
-    # Calculate the mean M-score for each company
-    z = z_score.groupby('company').agg({'value': 'mean'})
-    
-    # Calculate the percentage of companies with an M-score below the threshold
-    risk_company_pc = round(len(z[z['value'] < z_threshold]) * 100. / len(z), 0)
-    
-    # Identify the companies with an M-score below the threshold
-    risk_company = z[z['value'] < z_threshold].index.to_list()
-    
-    return risk_company_pc, risk_company
-
-def cagr(df: pd.DataFrame, cagr_period: int = 5) -> int:
-    """
-    Calculate the Compound Annual Growth Rate (CAGR) based on YoY EPS growth data.
-
-    The compound annual growth rate (CAGR) is the mean annual growth rate of an 
-    investment over a specified period of time longer than one year. It represents
-    one of the most accurate ways to calculate and determine returns for individual
-    assets, investment portfolios, and anything that can rise or fall in value over time.
-
-    Parameters:
-    - df (pandas.DataFrame): It contains columns value, metric and year.
-    - cagr_period: The number of years we would want to calculate cgar over.
-        
-
-    Returns:
-    int: The CAGR expressed as a percentage.
-    """
-    # Get the most recent year in the dataset
-    current_year = df['year'].max()
-    
-    # Filter data for the past 5 years
-    df_filtered = df[(df['metric'] == 'yoy_eps_growth') & 
-    (df['year'].isin(range(current_year - cagr_period, current_year + 1)))]
-
-    # Group by year and calculate the average YoY EPS growth for each year
-    annual_avg_growth = df_filtered.groupby('year')['value'].mean()
-
-    # Calculate the cumulative growth factor
-    cumulative_growth_factor = (1 + annual_avg_growth / 100).prod()
-
-    # Calculate the CAGR
-    n = len(annual_avg_growth)
-    cagr = cumulative_growth_factor ** (1 / n) - 1
-
-    # Return the CAGR as a percentage
-    return int(cagr * 100)
 
 # Section: Donut plots for risk metrics
 st.header("NASDAQ 100: Risk and Gain Metrics Over the Past 5 Years")
