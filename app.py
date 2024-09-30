@@ -479,7 +479,7 @@ with st.expander("Read More about Investment Avoidance and Average Retuen on Inv
         **Average Return for NASDAQ-100 Over Past 5 Years**
         
         - A high EPS growth rate is an indicator of a company's profitability and potential for long-term growth.
-         The overall average return on investment when invetsed in NASDAQ-100 over past 5 years.
+         The overall average return on investment when invetsed in NASDAQ-100 over past 5 years is {cagr(df)} %.
     """)
 
 #Define a dynamic color palette using Viridis
