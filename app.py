@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import altair as alt
 from typing import Tuple, List
+import os
 
 # Page configuration
 st.set_page_config(
@@ -44,7 +45,7 @@ st.markdown("""
 # Function to load the dataset
 @st.cache_data
 def load_data():
-    return pd.read_csv('cleaned_data.csv')  # Replace with your data file
+    return pd.read_csv('cleaned_data.csv') 
 
 # Function to determine arrow direction based on the value
 def get_arrow(value):
@@ -132,9 +133,19 @@ def create_financial_plot(pivot_df, unique_companies, color_map, metric1, metric
 
     return fig
 
+######################################################################
 # Sidebar: Filters for sector, subsector, and company
 with st.sidebar:
-    st.image(".\icons_and_images\daq.png")
+    # Get the current directory of the script
+    current_dir = os.path.dirname(__file__)
+    # Construct the full path to the image file
+    image_path = os.path.join(current_dir, 'daq.png')  
+    # Display the image
+    try:
+        st.image(image_path)
+    except FileNotFoundError:
+        st.error(f"Image not found at path: {image_path}")
+    # Add a sidebar label
     st.write("Filter the data by:")
 
     # Dropdown for sector selection
