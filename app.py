@@ -48,21 +48,60 @@ st.markdown("""
 ###############################################################################
 # Define helper functions
 
+# Get the current directory of the script
+current_dir = os.path.dirname(__file__)
+
+# Construct the full path to the data file
+data_path = os.path.join(current_dir, 'cleaned_data.csv') 
+
 # Function to load the dataset
 @st.cache_data
-def load_data():
-    return pd.read_csv('cleaned_data.csv') 
+def load_data() -> pd.DataFrame:
+    """
+    Loads data from a CSV file named 'cleaned_data.csv'.
 
-# Function to determine arrow direction based on the value
-def get_arrow(value):
-    return "&#9650;" if value > 0 else "&#9660;"
+    Returns:
+    pd.DataFrame: A pandas DataFrame containing the data from the CSV file.
+    """
+    return pd.read_csv(data_path)
 
-# Function to set the arrow color
-def get_arrow_color(value):
+def get_arrow(value: float) -> str:
+    """
+    Determines the arrow direction based on the value.
+
+    Parameters:
+    value (float): The value to evaluate.
+
+    Returns:
+    str: An HTML arrow character. Returns an upward arrow (▲) if the value 
+    is greater than 0, otherwise returns a downward arrow (▼).
+    """
+    return "▲" if value > 0 else "▼"
+
+def get_arrow_color(value: float) -> str:
+    """
+    Sets the arrow color based on the value.
+
+    Parameters:
+    value (float): The value to evaluate.
+
+    Returns:
+    str: The color of the arrow. Returns 'green' if the value is greater than 0, otherwise returns 'red'.
+    """
     return "green" if value > 0 else "red"
 
-# Function to find top performers based on a metric
-def find_top_performer(data, metric):
+def find_top_performer(data: pd.DataFrame, metric: str) -> pd.Series:
+    """
+    Finds the top performer based on a specified metric.
+
+    Parameters:
+    data (pd.DataFrame): The DataFrame containing the data.
+    metric (str): The metric to evaluate.
+
+    Returns:
+    pd.Series: The row of the DataFrame corresponding to the top performer for the specified metric.
+    If no data is found for the metric, a warning is displayed and None is returned.
+    """
     filtered_data = data[data['metric'] == metric].dropna(subset=['value'])
     if not filtered_data.empty:
         return filtered_data.loc[filtered_data['value'].idxmax()]
@@ -70,26 +109,73 @@ def find_top_performer(data, metric):
         st.warning(f"No data found for the metric: {metric}")
         return None
 
+
 # Function to create a donut plot
-def make_donut(input_response, input_text, input_color):
-    chart_color = ['#27AE60', '#12783D'] if input_color == 'green' else ['#E74C3C', '#781F16']
-    source = pd.DataFrame({"Category": ['', input_text], "Value": [100 - input_response, input_response]})
+def make_donut(input_response: float, input_text1: str, input_text2: str, input_color: Dict[str, str]) -> plt.Figure:
+    """
+    Creates a donut chart using Altair to visually represent two categories, such as Safe and Unsafe investments.
+
+    The chart displays a percentage of one category (e.g., Safe investments) and the remainder as the other category
+    (e.g., Unsafe investments). The center of the chart shows the percentage of the first category. Hovering over each 
+    section reveals a tooltip with the category name and percentage.
+
+    Parameters:
+    -----------
+    input_response : int
+        The percentage of the first category to display (e.g., Safe investments).
+        
+    input_text1 : str
+        The label for the first category, which corresponds to the input_response value (e.g., "Safe Investments").
+        
+    input_text2 : str
+        The label for the second category, representing the remainder (e.g., "Unsafe Investments").
+        
+    input_color : str
+        The color scheme for the chart, expected values are 'green' for safe investments or 'red' for unsafe investments.
+
+    Returns:
+    --------
+    alt.LayerChart
+        An Altair LayerChart object containing the donut chart, where users can see both categories with their percentages.
     
+    Example:
+    --------
+    >>> st.altair_chart(make_donut(90, "Safe Investments", "Unsafe Investments", 'green'), use_container_width=True)
+    This would display a donut chart where 90% of the chart represents safe investments in green and the other 10% 
+    represents unsafe investments in red.
+    
+    Notes:
+    ------
+    - The chart shows the percentage for the first category (e.g., safe investments) in the center.
+    - Tooltips are enabled to display the category name and percentage upon hover.
+    """
+    
+    # Define the color scheme based on the input_color
+    chart_color = ['#27AE60', '#12783D'] if input_color == 'green' else ['#E74C3C', '#781F16']
+    
+    # Create the data source for the donut chart
+    source = pd.DataFrame({"Category": [input_text2, input_text1], "Value": [100 - input_response, input_response]})
+    
+    # Create the background arc of the donut chart
     plot_bg = alt.Chart(source).mark_arc(innerRadius=45, cornerRadius=20).encode(
         theta="Value:Q",
-        color=alt.Color("Category:N", scale=alt.Scale(domain=[input_text, ''], range=chart_color), legend=None)
+        color=alt.Color("Category:N", scale=alt.Scale(domain=[input_text1, input_text2], range=chart_color), legend=None)
     ).properties(width=260, height=260)
     
+    # Create the main arc of the donut chart
     plot = alt.Chart(source).mark_arc(innerRadius=45, cornerRadius=25).encode(
         theta="Value:Q",
-        color=alt.Color("Category:N", scale=alt.Scale(domain=[input_text, ''], range=chart_color), legend=None)
+        color=alt.Color("Category:N", scale=alt.Scale(domain=[input_text1, input_text2], range=chart_color), legend=None)
     ).properties(width=260, height=260)
     
+    # Add the percentage text in the center of the chart
     text = plot.mark_text(align='center', color=chart_color[0], font="Lato", fontSize=32, fontWeight=700).encode(
         text=alt.value(f'{input_response} %')
     )
     
+    # Return the combined chart with background, arcs, and center text
     return plot_bg + plot + text
+
 
 # Define a function to create line plot for select metrics
 def create_financial_plot(
@@ -279,8 +365,6 @@ df = load_data()
 ######################################################################
 # Sidebar: Filters for sector, subsector, and company
 with st.sidebar:
-    # Get the current directory of the script
-    current_dir = os.path.dirname(__file__)
     # Construct the full path to the image file
     image_path = os.path.join(current_dir, 'daq.png')  
     # Display the image
@@ -456,13 +540,15 @@ st.header("NASDAQ 100: Risk and Gain Metrics Over the Past 5 Years")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.altair_chart(make_donut(int(avoid_mrisk(df)[0]), "M-Score Avoidance", 'red'), use_container_width=True)
+    st.altair_chart(make_donut(int(avoid_mrisk(df)[0]), "M-Score: Likely a Manipulator", "M-Score: Safe to Invest", 'red'), 
+    use_container_width=True)
 
 with col2:
-    st.altair_chart(make_donut(int(avoid_zrisk(df)[0]), "Z-Score Avoidance", 'red'), use_container_width=True)
+    st.altair_chart(make_donut(int(avoid_zrisk(df)[0]), "Z-Score: Likely Heading to Bankruptcy", "Z-Score: Safe to Invest", 'red'), 
+    use_container_width=True)
 
 with col3:
-    st.altair_chart(make_donut(cagr(df), "NASDAQ-100 Compound Annual Growth Rate", 'green'), use_container_width=True)
+    st.altair_chart(make_donut(cagr(df), "NASDAQ-100 Compound Annual Growth Rate", '', 'green'), use_container_width=True)
 
 # Add the "Read More" expander
 with st.expander("Read More about Investment Avoidance and Average Retuen on Investment"):
