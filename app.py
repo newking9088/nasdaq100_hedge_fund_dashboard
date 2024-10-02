@@ -252,7 +252,7 @@ def create_financial_plot(
     return fig
 
 # Define a function to calculate average m_score and companies that carries risk of manipulation
-def avoid_mrisk(df: pd.DataFrame, m_threshold: float = -3.0) -> Tuple[float, List]:
+def avoid_mrisk(df: pd.DataFrame, m_threshold: float = -1.78) -> Tuple[float, List]:
     """
     Identify companies with an M-score below a specified threshold and calculate the percentage of such companies.
 
@@ -264,12 +264,12 @@ def avoid_mrisk(df: pd.DataFrame, m_threshold: float = -3.0) -> Tuple[float, Lis
         - 'company': The name of the company.
         - 'metric': The type of metric (should include 'mscore').
         - 'value': The value of the metric.
-    m_threshold (float): The threshold for the M-score to identify high-risk companies. Default is -3.0.
+    m_threshold (float): The threshold for the M-score to identify high-risk companies. Default is -1.78.
 
     Returns:
     Tuple[float, pd.Series]: A tuple containing:
-        - The percentage of companies with an M-score below the threshold.
-        - A Series of companies with an M-score below the threshold.
+        - The percentage of companies with an M-score above the threshold.
+        - A Series of companies with an M-score above the threshold.
     """
     # Filter the DataFrame for M-score metrics
     m_score = df[df['metric'] == 'mscore']
@@ -278,10 +278,10 @@ def avoid_mrisk(df: pd.DataFrame, m_threshold: float = -3.0) -> Tuple[float, Lis
     m = m_score.groupby('company').agg({'value': 'mean'})
     
     # Calculate the percentage of companies with an M-score below the threshold
-    risk_company_pc = round(len(m[m['value'] < m_threshold]) * 100. / len(m), 0)
+    risk_company_pc = round(len(m[m['value'] > m_threshold]) * 100. / len(m), 0)
     
     # Identify the companies with an M-score below the threshold
-    risk_company = m[m['value'] < m_threshold].index.to_list()
+    risk_company = m[m['value'] > m_threshold].index.to_list()
     
     return risk_company_pc, risk_company
 
@@ -825,7 +825,7 @@ agg_df = pivot_df1.groupby('company').agg({'mscore': 'mean', 'zscore': 'mean'}).
 # Identify companies to avoid
 companies_to_avoid = agg_df[
     (agg_df['zscore'] < 1.81) |  # Generally, Z-score < 1.81 indicates financial distress
-    (agg_df['mscore'] < -3)      # Generally, M-score < -2 indicates potential earnings manipulation
+    (agg_df['mscore'] > -1.78)      # Generally, M-score < -2 indicates potential earnings manipulation
 ]['company'].tolist()
 
 # Create subplots for Z-score and M-score
@@ -861,9 +861,9 @@ for company in unique_companies:
 # Add horizontal line for M-score threshold
 fig5.add_trace(go.Scatter(
     x=[years[0], years[-1]],  # Set x-values to match the year range
-    y=[-3, -3],
+    y=[-1.78, -1.78],
     mode='lines',
-    name='M-Score Threshold (-3)',
+    name='M-Score Threshold (-1.78)',
     line=dict(color='red', dash='dash', width=2)
 ), row=1, col=2)
 
@@ -880,7 +880,7 @@ st.plotly_chart(fig5)
 with st.expander("Altman Z-Score & Beneish M-Score Analysis"):
     st.write("The Altman Z-Score is a measure of a company's financial health and bankruptcy risk. A score below 1.81 \
              suggests a higher likelihood of bankruptcy.")
-    st.write("The Beneish M-Score is used to detect earnings manipulation. A score below -3 indicates potential manipulation.")
+    st.write("The Beneish M-Score is used to detect earnings manipulation. A score above -1.78 indicates potential manipulation.")
     st.write("#### Companies with higher investment risk:")
     if companies_to_avoid:
         st.write(", ".join(companies_to_avoid))
