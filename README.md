@@ -2,6 +2,7 @@
 
 ## Quick Links
 [View Live Dashboard](https://nasdaq100hedgefunddashboard-paudel.streamlit.app/)
+
 [Blogpost](https://nycdatascience.com/blog/streamlit/optimizing-roi-for-nasdaq-100-companies/?preview_id=99356&preview_nonce=ec4f9efaf8&_thumbnail_id=99358&preview=true&aiEnableCheckShortcode=true)
 
 ## Table of Contents
