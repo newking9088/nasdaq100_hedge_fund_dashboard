@@ -1,4 +1,4 @@
-# NASDAQ-100 Hedge Fund Dashboard with LLM Integration 🚀
+# SmartFinance AI: Intelligent NASDAQ-100 Analytics Platform 🚀
 
 ## Quick Links
 [View Live Dashboard](https://nasdaq100hedgefunddashboard-paudel.streamlit.app/)
