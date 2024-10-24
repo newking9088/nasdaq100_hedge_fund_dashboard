@@ -9,8 +9,16 @@ import matplotlib.pyplot as plt
 import altair as alt
 from typing import Tuple, List, Dict
 import os
-
-
+import openai
+import time
+import tempfile
+from langchain.chains import ConversationalRetrievalChain
+from langchain.chat_models import ChatOpenAI
+from langchain.document_loaders import PyPDFLoader
+from langchain.indexes import VectorstoreIndexCreator
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.text_splitter import CharacterTextSplitter
 ###############################################################################
 # Page configuration
 st.set_page_config(
@@ -886,3 +894,174 @@ with st.expander("Altman Z-Score & Beneish M-Score Analysis"):
         st.write(", ".join(companies_to_avoid))
     else:
         st.write("No companies to avoid based on the selected criteria.")
+
+####################################################################################################
+#####################LLM Powered Chatbot and Document Q & A ########################################
+# Initialize session states for LLM powered chats
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "system", "content": "You are an AI Assistant with expertise in both document analysis and financial advising."}
+    ]
+
+# create a list to store chat history
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# This particular variable (doc_index) is used to store the FAISS
+#  vector database that gets created when users upload documents.
+if "doc_index" not in st.session_state:
+    st.session_state.doc_index = None
+
+# Header and Mode Selection
+st.title("Financial AI Guru: Invest Smart")
+mode = st.radio("Select Mode", ["Financial Advisor", "Document Q&A"], horizontal = True)
+
+# Provide options to use models for different purposes
+model_options = [
+    "gpt-3.5-turbo",
+    "gpt-4",
+    "gpt-4-turbo-preview",
+    "gpt-3.5-turbo-16k",
+    "dall-e-3",
+    "tts-1-hd",
+    "o1-preview"
+]
+
+# select a model for current session state
+st.session_state["openai_model"] = st.selectbox(
+    "Select Model",
+    options=model_options,
+    index=0
+)
+
+# Control buttons in a single row
+cols = st.columns([1, 1, 1, 2])
+with cols[0]:
+    show_history = st.button("Show Chat History")
+with cols[1]:
+    clear_history = st.button("Clear History")
+with cols[2]:
+    st.metric("Messages", len(st.session_state.chat_history))
+
+# Document Q&A Mode Setup
+if mode == "Document Q&A":
+    uploaded_files = st.file_uploader("Upload PDF documents", type=['pdf'], accept_multiple_files=True)
+    
+    if uploaded_files:
+        if not st.session_state.doc_index: # If the document were not vectorized/embedded
+            with st.spinner("Processing documents..."):
+                try:
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        # Initialize embeddings
+                        embeddings = OpenAIEmbeddings(openai_api_key=st.secrets["OPEN_AI_KEY"])
+                        
+                        # Initialize text splitter
+                        text_splitter = CharacterTextSplitter(
+                            chunk_size = 1000,
+                            chunk_overlap = 200
+                        )
+                        
+                        documents = []
+                        for uploaded_file in uploaded_files:
+                            temp_file_path = os.path.join(temp_dir, uploaded_file.name)
+                            with open(temp_file_path, "wb") as temp_file:
+                                temp_file.write(uploaded_file.getvalue())
+                            loader = PyPDFLoader(temp_file_path)
+                            documents.extend(loader.load())
+                        
+                        # Split documents into chunks
+                        texts = text_splitter.split_documents(documents)
+                        
+                        # Create vector store using Meta's FAISS
+                        vectorstore = FAISS.from_documents(texts, embeddings)
+                        
+                        # Store the vectorstore in session state
+                        st.session_state.doc_index = vectorstore
+                        
+                    st.success(f"Processed {len(uploaded_files)} documents")
+                except Exception as e:
+                    st.error(f"Error processing documents: {str(e)}")
+
+# Shared chat interface functions
+def call_openai(prompt, mode):
+    client = openai.OpenAI(api_key = st.secrets["OPEN_AI_KEY"])
+    
+    if mode == "Document Q&A" and st.session_state.doc_index:
+        # Create ChatOpenAI instance with API key
+        chat_model = ChatOpenAI(
+            model=st.session_state.get("openai_model", "gpt-3.5-turbo"),
+            openai_api_key = st.secrets["OPEN_AI_KEY"]  # Add the API key here
+        )
+        
+        chain = ConversationalRetrievalChain.from_llm(
+            llm=chat_model,
+            retriever=st.session_state.doc_index.as_retriever(search_kwargs={"k": 1}),
+        )
+        return chain({"question": prompt, "chat_history": st.session_state.chat_history})["answer"]
+    else:
+        messages = [m for m in st.session_state.messages if m["role"] != "system"]
+        messages.append({"role": "user", "content": prompt})
+        response = client.chat.completions.create(
+            model=st.session_state.get("openai_model", "gpt-3.5-turbo"),
+            messages=messages,
+            stream=True
+        )
+        return response
+
+# Display chat history if requested
+if show_history:
+    st.subheader("Chat History")
+    for i, (query, response) in enumerate(st.session_state.chat_history):
+        with st.expander(f"Conversation {i+1}"):
+            st.write("**User:**", query)
+            st.write("**Assistant:**", response)
+
+# Clear chat history if requested
+if clear_history:
+    st.session_state.messages = [st.session_state.messages[0]]  # Keep system message
+    st.session_state.chat_history = []
+    st.rerun()
+
+# Chat interface
+for message in st.session_state.messages[1:]:  # Skip system message
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Handle user input
+if prompt := st.chat_input("Type your message here..."):
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        full_response = ""
+        
+        try:
+            if mode == "Document Q&A":
+                if not st.session_state.doc_index:
+                    st.info("Please upload documents first.")
+                    full_response = "Please upload documents before asking questions."
+                else:
+                    full_response = call_openai(prompt, mode)
+                    message_placeholder.markdown(full_response)
+            else:
+                for chunk in call_openai(prompt, mode):
+                    if hasattr(chunk.choices[0].delta, 'content'):
+                        content = chunk.choices[0].delta.content
+                        if content:
+                            full_response += content
+                            message_placeholder.markdown(full_response + "▌")
+                message_placeholder.markdown(full_response)
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+            full_response = "I encountered an error. Please try again."
+        
+        # Update chat history
+        if full_response:
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
+            st.session_state.chat_history.append((prompt, full_response))
+
+# Display current mode and document count
+if mode == "Document Q&A" and st.session_state.doc_index:
+    st.sidebar.markdown(f"📚 Documents loaded: {len(uploaded_files)}")
